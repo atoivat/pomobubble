@@ -16,8 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +35,8 @@ fun PomodoroBubbleContent(
     onRewind: () -> Unit,
     onSkip: () -> Unit,
     onFullReset: () -> Unit,
+    onDragStart: () -> Unit = {},
+    onDragEnd: () -> Unit = {},
     onDragDelta: (dx: Float, dy: Float) -> Unit
 ) {
     val phaseColor = when (state.phase) {
@@ -42,10 +47,15 @@ fun PomodoroBubbleContent(
     }
 
     val dragModifier = Modifier.pointerInput(Unit) {
-        detectDragGestures { change, dragAmount ->
-            change.consume()
-            onDragDelta(dragAmount.x, dragAmount.y)
-        }
+        detectDragGestures(
+            onDragStart = { onDragStart() },
+            onDragEnd = { onDragEnd() },
+            onDragCancel = { onDragEnd() },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                onDragDelta(dragAmount.x, dragAmount.y)
+            }
+        )
     }
 
     Crossfade(targetState = state.isCollapsed, label = "BubbleStateTransition") { collapsed ->
@@ -108,6 +118,7 @@ private fun ExpandedPill(
 ) {
     Column(
         modifier = modifier
+            .width(IntrinsicSize.Min)
             .clip(RoundedCornerShape(24.dp))
             .background(backgroundColor)
     ) {
@@ -117,15 +128,26 @@ private fun ExpandedPill(
             horizontalArrangement = Arrangement.Center
         ) {
             // Rewind Button
-            Text(
-                text = " < ",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { onRewind() }
-            )
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onRewind() }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "<",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        textAlign = TextAlign.Center
+                    )
+                )
+            }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Center Play/Pause Timer (Long press for Full Reset)
             Text(
@@ -134,6 +156,10 @@ private fun ExpandedPill(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
+                style = TextStyle(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    textAlign = TextAlign.Center
+                ),
                 textDecoration = if (state.isPaused) TextDecoration.LineThrough else TextDecoration.None,
                 modifier = Modifier.combinedClickable(
                     onClick = { onTogglePlayPause() },
@@ -141,16 +167,27 @@ private fun ExpandedPill(
                 )
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Skip Button
-            Text(
-                text = " > ",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { onSkip() }
-            )
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onSkip() }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = ">",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        textAlign = TextAlign.Center
+                    )
+                )
+            }
         }
 
         // Bottom Progress Line (2dp white bar)

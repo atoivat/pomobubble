@@ -22,13 +22,16 @@ import com.pomobubble.data.AppDatabase
 import com.pomobubble.data.FocusSession
 import com.pomobubble.model.PomodoroPhase
 import com.pomobubble.state.PomodoroStateMachine
+import com.pomobubble.ui.DismissTargetView
 import com.pomobubble.ui.PomodoroBubbleContent
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class PomodoroOverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
     private lateinit var composeView: ComposeView
+    private lateinit var dismissView: ComposeView
     private lateinit var soundManager: SoundManager
     private lateinit var database: AppDatabase
 
@@ -38,6 +41,9 @@ class PomodoroOverlayService : Service() {
     val stateMachine = PomodoroStateMachine()
     private var tickerJob: Job? = null
     private var previousPhase: PomodoroPhase = PomodoroPhase.IDLE
+
+    private val isDraggingState = MutableStateFlow(false)
+    private val isHoveredState = MutableStateFlow(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +56,7 @@ class PomodoroOverlayService : Service() {
         overlayLifecycleOwner.onResume()
 
         startForegroundNotification()
+        setupDismissTargetView()
         setupOverlayView()
         observeStateChanges()
         startTickerLoop()
@@ -95,6 +102,32 @@ class PomodoroOverlayService : Service() {
         }
     }
 
+    private fun setupDismissTargetView() {
+        val dismissParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        }
+
+        dismissView = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(overlayLifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(overlayLifecycleOwner)
+            setViewTreeViewModelStoreOwner(overlayLifecycleOwner)
+
+            setContent {
+                val isDragging by isDraggingState.collectAsState()
+                val isHovered by isHoveredState.collectAsState()
+                DismissTargetView(isVisible = isDragging, isHovered = isHovered)
+            }
+        }
+
+        windowManager.addView(dismissView, dismissParams)
+    }
+
     private fun setupOverlayView() {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -121,10 +154,32 @@ class PomodoroOverlayService : Service() {
                     onRewind = { stateMachine.rewind() },
                     onSkip = { stateMachine.skip() },
                     onFullReset = { stateMachine.fullReset() },
+                    onDragStart = { isDraggingState.value = true },
+                    onDragEnd = {
+                        isDraggingState.value = false
+                        if (isHoveredState.value) {
+                            stopSelf()
+                        }
+                        isHoveredState.value = false
+                    },
                     onDragDelta = { dx, dy ->
                         params.x += dx.toInt()
                         params.y += dy.toInt()
                         windowManager.updateViewLayout(composeView, params)
+
+                        val displayMetrics = resources.displayMetrics
+                        val targetX = displayMetrics.widthPixels / 2
+                        val targetY = displayMetrics.heightPixels - 150
+
+                        val bubbleCenterX = params.x + (composeView.width / 2)
+                        val bubbleCenterY = params.y + (composeView.height / 2)
+
+                        val distance = Math.hypot(
+                            (bubbleCenterX - targetX).toDouble(),
+                            (bubbleCenterY - targetY).toDouble()
+                        )
+
+                        isHoveredState.value = (distance < 250)
                     }
                 )
             }
@@ -138,14 +193,12 @@ class PomodoroOverlayService : Service() {
             stateMachine.state.collect { state ->
                 val currentPhase = state.phase
                 if (previousPhase != currentPhase) {
-                    // Trigger alert when transitioning into a wait state (timer completed)
                     if (currentPhase == PomodoroPhase.WAIT_SHORT_REST ||
                         currentPhase == PomodoroPhase.WAIT_LONG_REST ||
                         currentPhase == PomodoroPhase.WAIT_FOCUS
                     ) {
                         soundManager.playPhaseCompleteSound()
 
-                        // Log completed Focus session in Room DB
                         if (previousPhase == PomodoroPhase.FOCUS) {
                             launch(Dispatchers.IO) {
                                 database.focusSessionDao().insertSession(
@@ -181,6 +234,9 @@ class PomodoroOverlayService : Service() {
         serviceScope.cancel()
         if (::composeView.isInitialized) {
             windowManager.removeView(composeView)
+        }
+        if (::dismissView.isInitialized) {
+            windowManager.removeView(dismissView)
         }
         overlayLifecycleOwner.onDestroy()
     }
