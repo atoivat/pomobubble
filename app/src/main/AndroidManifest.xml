@@ -29,6 +29,14 @@
             android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
             android:value="Floating Pomodoro timer overlay service" />
 
+        <!-- Floating Overlay Foreground Service -->
+        <service
+            android:name=".service.PomodoroOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+
+
     </application>
 
 </manifest>
