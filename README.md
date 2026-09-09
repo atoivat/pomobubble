@@ -1,6 +1,6 @@
 # PomoBubble 🍅🫧
 
-A minimalist, floating Pomodoro timer and focus analytics app for Android, designed with a clean AwesomeWM-inspired aesthetic and real-time state synchronization.
+A minimalist, floating Pomodoro timer and focus analytics app for Android, designed with a clean aesthetic and real-time state synchronization.
 
 ---
 
