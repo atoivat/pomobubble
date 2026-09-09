@@ -9,6 +9,8 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -16,6 +18,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.pomobubble.MainActivity
 import com.pomobubble.state.PomodoroStateMachine
+import com.pomobubble.ui.PomodoroBubbleContent
 import kotlinx.coroutines.*
 
 class PomodoroOverlayService : Service() {
@@ -99,7 +102,19 @@ class PomodoroOverlayService : Service() {
             setViewTreeViewModelStoreOwner(overlayLifecycleOwner)
 
             setContent {
-                // UI will be connected in Step 3
+                val state by stateMachine.state.collectAsState()
+                PomodoroBubbleContent(
+                    state = state,
+                    onTogglePlayPause = { stateMachine.togglePlayPause() },
+                    onRewind = { stateMachine.rewind() },
+                    onSkip = { stateMachine.skip() },
+                    onFullReset = { stateMachine.fullReset() },
+                    onDragDelta = { dx, dy ->
+                        params.x += dx.toInt()
+                        params.y += dy.toInt()
+                        windowManager.updateViewLayout(composeView, params)
+                    }
+                )
             }
         }
 
