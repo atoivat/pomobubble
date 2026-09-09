@@ -17,6 +17,10 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.pomobubble.MainActivity
+import com.pomobubble.audio.SoundManager
+import com.pomobubble.data.AppDatabase
+import com.pomobubble.data.FocusSession
+import com.pomobubble.model.PomodoroPhase
 import com.pomobubble.state.PomodoroStateMachine
 import com.pomobubble.ui.PomodoroBubbleContent
 import kotlinx.coroutines.*
@@ -25,21 +29,29 @@ class PomodoroOverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
     private lateinit var composeView: ComposeView
+    private lateinit var soundManager: SoundManager
+    private lateinit var database: AppDatabase
+
     private val overlayLifecycleOwner = OverlayLifecycleOwner()
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     val stateMachine = PomodoroStateMachine()
     private var tickerJob: Job? = null
+    private var previousPhase: PomodoroPhase = PomodoroPhase.IDLE
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        soundManager = SoundManager(this)
+        database = AppDatabase.getDatabase(this)
+
         overlayLifecycleOwner.onCreate()
         overlayLifecycleOwner.onStart()
         overlayLifecycleOwner.onResume()
 
         startForegroundNotification()
         setupOverlayView()
+        observeStateChanges()
         startTickerLoop()
     }
 
@@ -119,6 +131,33 @@ class PomodoroOverlayService : Service() {
         }
 
         windowManager.addView(composeView, params)
+    }
+
+    private fun observeStateChanges() {
+        serviceScope.launch {
+            stateMachine.state.collect { state ->
+                val currentPhase = state.phase
+                if (previousPhase != currentPhase) {
+                    // Trigger alert when transitioning into a wait state (timer completed)
+                    if (currentPhase == PomodoroPhase.WAIT_SHORT_REST ||
+                        currentPhase == PomodoroPhase.WAIT_LONG_REST ||
+                        currentPhase == PomodoroPhase.WAIT_FOCUS
+                    ) {
+                        soundManager.playPhaseCompleteSound()
+
+                        // Log completed Focus session in Room DB
+                        if (previousPhase == PomodoroPhase.FOCUS) {
+                            launch(Dispatchers.IO) {
+                                database.focusSessionDao().insertSession(
+                                    FocusSession(durationMinutes = 25, completed = true)
+                                )
+                            }
+                        }
+                    }
+                    previousPhase = currentPhase
+                }
+            }
+        }
     }
 
     private fun startTickerLoop() {
