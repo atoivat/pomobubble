@@ -18,22 +18,43 @@ class PomodoroStateMachineTest {
     }
 
     @Test
-    fun initialState_isIdleAndPausedAndCollapsed() {
+    fun initialState_isFocusPhasePausedAndCollapsed() {
         val state = stateMachine.state.value
-        assertEquals(PomodoroPhase.IDLE, state.phase)
+        assertEquals(PomodoroPhase.FOCUS, state.phase)
+        assertEquals(25 * 60L, state.remainingSeconds)
         assertTrue(state.isPaused)
         assertTrue(state.isCollapsed)
         assertEquals(0, state.focusCount)
     }
 
     @Test
-    fun togglePlayPause_whenIdle_startsFocusPhaseAndUncollapses() {
+    fun singleClickOnCollapsedBubble_togglesPauseWithoutExpanding() {
         stateMachine.togglePlayPause()
 
         val state = stateMachine.state.value
         assertEquals(PomodoroPhase.FOCUS, state.phase)
         assertFalse(state.isPaused)
+        assertTrue(state.isCollapsed) // MUST remain collapsed!
+    }
+
+    @Test
+    fun toggleCollapse_expandsOrCollapsesWithoutChangingTimerOrPauseState() {
+        stateMachine.togglePlayPause() // Start timer
+        stateMachine.onTick(300) // 300s elapsed -> 1200s remaining
+
+        // Expand to pill view
+        stateMachine.toggleCollapse()
+        var state = stateMachine.state.value
         assertFalse(state.isCollapsed)
+        assertEquals(1200L, state.remainingSeconds)
+        assertFalse(state.isPaused)
+
+        // Collapse back to bubble view
+        stateMachine.toggleCollapse()
+        state = stateMachine.state.value
+        assertTrue(state.isCollapsed)
+        assertEquals(1200L, state.remainingSeconds)
+        assertFalse(state.isPaused)
     }
 
     @Test
@@ -63,14 +84,15 @@ class PomodoroStateMachineTest {
     }
 
     @Test
-    fun fullReset_resetsToIdleState() {
+    fun fullReset_resetsToFocusState() {
         stateMachine.togglePlayPause()
         stateMachine.skip()
 
         stateMachine.fullReset()
 
         val state = stateMachine.state.value
-        assertEquals(PomodoroPhase.IDLE, state.phase)
+        assertEquals(PomodoroPhase.FOCUS, state.phase)
+        assertEquals(25 * 60L, state.remainingSeconds)
         assertEquals(0, state.focusCount)
         assertTrue(state.isPaused)
         assertTrue(state.isCollapsed)

@@ -14,36 +14,24 @@ class PomodoroStateMachine {
 
     fun togglePlayPause() {
         _state.update { current ->
-            if (current.isCollapsed) {
-                val nextPhase = when (current.phase) {
-                    PomodoroPhase.IDLE, PomodoroPhase.WAIT_FOCUS -> PomodoroPhase.FOCUS
-                    PomodoroPhase.WAIT_SHORT_REST -> PomodoroPhase.SHORT_REST
-                    PomodoroPhase.WAIT_LONG_REST -> PomodoroPhase.LONG_REST
-                    else -> current.phase
-                }
-                current.copy(
-                    phase = nextPhase,
-                    remainingSeconds = if (current.phase != nextPhase) nextPhase.defaultDurationSeconds else current.remainingSeconds,
-                    isPaused = false,
-                    isCollapsed = false
-                )
-            } else {
-                if (current.isPaused) {
-                    val nextPhase = when (current.phase) {
-                        PomodoroPhase.IDLE, PomodoroPhase.WAIT_FOCUS -> PomodoroPhase.FOCUS
-                        PomodoroPhase.WAIT_SHORT_REST -> PomodoroPhase.SHORT_REST
-                        PomodoroPhase.WAIT_LONG_REST -> PomodoroPhase.LONG_REST
-                        else -> current.phase
-                    }
-                    current.copy(
-                        phase = nextPhase,
-                        remainingSeconds = if (current.phase != nextPhase) nextPhase.defaultDurationSeconds else current.remainingSeconds,
-                        isPaused = false
-                    )
-                } else {
-                    current.copy(isPaused = true)
-                }
+            val nextPhase = when (current.phase) {
+                PomodoroPhase.WAIT_FOCUS -> PomodoroPhase.FOCUS
+                PomodoroPhase.WAIT_SHORT_REST -> PomodoroPhase.SHORT_REST
+                PomodoroPhase.WAIT_LONG_REST -> PomodoroPhase.LONG_REST
+                else -> current.phase
             }
+            val isNewPhase = current.phase != nextPhase
+            current.copy(
+                phase = nextPhase,
+                remainingSeconds = if (isNewPhase) nextPhase.defaultDurationSeconds else current.remainingSeconds,
+                isPaused = if (isNewPhase) false else !current.isPaused
+            )
+        }
+    }
+
+    fun toggleCollapse() {
+        _state.update { current ->
+            current.copy(isCollapsed = !current.isCollapsed)
         }
     }
 
@@ -98,7 +86,7 @@ class PomodoroStateMachine {
     fun skip() {
         _state.update { current ->
             val (nextPhase, nextCount) = when (current.phase) {
-                PomodoroPhase.FOCUS, PomodoroPhase.WAIT_FOCUS, PomodoroPhase.IDLE -> {
+                PomodoroPhase.FOCUS, PomodoroPhase.WAIT_FOCUS -> {
                     val count = current.focusCount + 1
                     if (count >= 4) {
                         PomodoroPhase.WAIT_LONG_REST to count
@@ -139,7 +127,7 @@ class PomodoroStateMachine {
                 )
             } else {
                 val (prevPhase, prevCount) = when (current.phase) {
-                    PomodoroPhase.WAIT_FOCUS, PomodoroPhase.IDLE, PomodoroPhase.FOCUS -> {
+                    PomodoroPhase.WAIT_FOCUS, PomodoroPhase.FOCUS -> {
                         if (current.focusCount > 0) {
                             PomodoroPhase.WAIT_SHORT_REST to (current.focusCount - 1)
                         } else {
@@ -165,7 +153,7 @@ class PomodoroStateMachine {
 
     fun fullReset() {
         _state.value = PomodoroState(
-            phase = PomodoroPhase.IDLE,
+            phase = PomodoroPhase.FOCUS,
             remainingSeconds = PomodoroPhase.FOCUS.defaultDurationSeconds,
             focusCount = 0,
             isPaused = true,

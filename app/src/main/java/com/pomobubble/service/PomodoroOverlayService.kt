@@ -40,7 +40,7 @@ class PomodoroOverlayService : Service() {
 
     val stateMachine = PomodoroStateMachine()
     private var tickerJob: Job? = null
-    private var previousPhase: PomodoroPhase = PomodoroPhase.IDLE
+    private var previousPhase: PomodoroPhase = PomodoroPhase.FOCUS
 
     private val isDraggingState = MutableStateFlow(false)
     private val isHoveredState = MutableStateFlow(false)
@@ -151,6 +151,7 @@ class PomodoroOverlayService : Service() {
                 PomodoroBubbleContent(
                     state = state,
                     onTogglePlayPause = { stateMachine.togglePlayPause() },
+                    onToggleCollapse = { stateMachine.toggleCollapse() },
                     onRewind = { stateMachine.rewind() },
                     onSkip = { stateMachine.skip() },
                     onFullReset = { stateMachine.fullReset() },
