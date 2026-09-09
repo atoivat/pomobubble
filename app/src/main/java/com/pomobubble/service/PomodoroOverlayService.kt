@@ -55,6 +55,14 @@ class PomodoroOverlayService : Service() {
         overlayLifecycleOwner.onStart()
         overlayLifecycleOwner.onResume()
 
+        stateMachine.onSessionLog = { durationMinutes, completed ->
+            serviceScope.launch(Dispatchers.IO) {
+                database.focusSessionDao().insertSession(
+                    FocusSession(durationMinutes = durationMinutes, completed = completed)
+                )
+            }
+        }
+
         startForegroundNotification()
         setupDismissTargetView()
         setupOverlayView()
@@ -199,14 +207,6 @@ class PomodoroOverlayService : Service() {
                         currentPhase == PomodoroPhase.WAIT_FOCUS
                     ) {
                         soundManager.playPhaseCompleteSound()
-
-                        if (previousPhase == PomodoroPhase.FOCUS) {
-                            launch(Dispatchers.IO) {
-                                database.focusSessionDao().insertSession(
-                                    FocusSession(durationMinutes = 25, completed = true)
-                                )
-                            }
-                        }
                     }
                     previousPhase = currentPhase
                 }

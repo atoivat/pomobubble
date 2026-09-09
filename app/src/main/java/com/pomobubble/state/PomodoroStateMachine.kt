@@ -9,8 +9,20 @@ import kotlinx.coroutines.flow.update
 
 class PomodoroStateMachine {
 
+    var onSessionLog: ((durationMinutes: Int, completed: Boolean) -> Unit)? = null
+
     private val _state = MutableStateFlow(PomodoroState())
     val state: StateFlow<PomodoroState> = _state.asStateFlow()
+
+    private fun handleInterruptionIfNeeded(current: PomodoroState) {
+        if (current.phase == PomodoroPhase.FOCUS) {
+            val elapsedSeconds = PomodoroPhase.FOCUS.defaultDurationSeconds - current.remainingSeconds
+            val elapsedMinutes = (elapsedSeconds / 60).toInt()
+            if (elapsedMinutes > 0) {
+                onSessionLog?.invoke(elapsedMinutes, false)
+            }
+        }
+    }
 
     fun togglePlayPause() {
         _state.update { current ->
@@ -43,6 +55,10 @@ class PomodoroStateMachine {
             if (newRemaining <= 0) {
                 when (current.phase) {
                     PomodoroPhase.FOCUS -> {
+                        onSessionLog?.invoke(
+                            (PomodoroPhase.FOCUS.defaultDurationSeconds / 60).toInt(),
+                            true
+                        )
                         val newCount = current.focusCount + 1
                         if (newCount >= 4) {
                             current.copy(
@@ -84,6 +100,7 @@ class PomodoroStateMachine {
     }
 
     fun skip() {
+        handleInterruptionIfNeeded(_state.value)
         _state.update { current ->
             val (nextPhase, nextCount) = when (current.phase) {
                 PomodoroPhase.FOCUS, PomodoroPhase.WAIT_FOCUS -> {
@@ -111,6 +128,7 @@ class PomodoroStateMachine {
     }
 
     fun rewind() {
+        handleInterruptionIfNeeded(_state.value)
         _state.update { current ->
             val defaultDuration = current.phase.defaultDurationSeconds
             if (!current.isPaused || current.remainingSeconds < defaultDuration) {
@@ -152,6 +170,7 @@ class PomodoroStateMachine {
     }
 
     fun fullReset() {
+        handleInterruptionIfNeeded(_state.value)
         _state.value = PomodoroState(
             phase = PomodoroPhase.FOCUS,
             remainingSeconds = PomodoroPhase.FOCUS.defaultDurationSeconds,

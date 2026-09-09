@@ -97,4 +97,96 @@ class PomodoroStateMachineTest {
         assertTrue(state.isPaused)
         assertTrue(state.isCollapsed)
     }
+
+    @Test
+    fun startSession_doesNotTriggerSessionLogCallback() {
+        var loggedDuration = -1
+        stateMachine.onSessionLog = { duration, _ ->
+            loggedDuration = duration
+        }
+
+        stateMachine.togglePlayPause() // Start FOCUS
+
+        assertEquals(-1, loggedDuration)
+    }
+
+    @Test
+    fun finishFocusSession_triggersSessionLogCallbackWithFullDurationAndCompletedTrue() {
+        var loggedDuration = -1
+        var loggedCompleted = false
+        stateMachine.onSessionLog = { duration, completed ->
+            loggedDuration = duration
+            loggedCompleted = completed
+        }
+
+        stateMachine.togglePlayPause() // Start FOCUS
+        stateMachine.onTick(1500) // Complete 25 mins
+
+        assertEquals(25, loggedDuration)
+        assertTrue(loggedCompleted)
+    }
+
+    @Test
+    fun skipFocusSession_triggersSessionLogCallbackWithSpannedDurationAndCompletedFalse() {
+        var loggedDuration = -1
+        var loggedCompleted = true
+        stateMachine.onSessionLog = { duration, completed ->
+            loggedDuration = duration
+            loggedCompleted = completed
+        }
+
+        stateMachine.togglePlayPause() // Start FOCUS
+        stateMachine.onTick(600) // 10 mins spanned (900s remaining)
+        stateMachine.skip() // Interrupt via skip
+
+        assertEquals(10, loggedDuration)
+        assertFalse(loggedCompleted)
+    }
+
+    @Test
+    fun rewindFocusSession_triggersSessionLogCallbackWithSpannedDurationAndCompletedFalse() {
+        var loggedDuration = -1
+        var loggedCompleted = true
+        stateMachine.onSessionLog = { duration, completed ->
+            loggedDuration = duration
+            loggedCompleted = completed
+        }
+
+        stateMachine.togglePlayPause() // Start FOCUS
+        stateMachine.onTick(720) // 12 mins spanned
+        stateMachine.rewind() // Interrupt via rewind
+
+        assertEquals(12, loggedDuration)
+        assertFalse(loggedCompleted)
+    }
+
+    @Test
+    fun fullResetFocusSession_triggersSessionLogCallbackWithSpannedDurationAndCompletedFalse() {
+        var loggedDuration = -1
+        var loggedCompleted = true
+        stateMachine.onSessionLog = { duration, completed ->
+            loggedDuration = duration
+            loggedCompleted = completed
+        }
+
+        stateMachine.togglePlayPause() // Start FOCUS
+        stateMachine.onTick(900) // 15 mins spanned
+        stateMachine.fullReset() // Interrupt via full reset
+
+        assertEquals(15, loggedDuration)
+        assertFalse(loggedCompleted)
+    }
+
+    @Test
+    fun skipFocusSession_whenZeroTimeSpanned_doesNotTriggerSessionLogCallback() {
+        var loggedDuration = -1
+        stateMachine.onSessionLog = { duration, _ ->
+            loggedDuration = duration
+        }
+
+        stateMachine.togglePlayPause() // Start FOCUS
+        stateMachine.skip() // Skip immediately with 0 elapsed time
+
+        assertEquals(-1, loggedDuration)
+    }
 }
