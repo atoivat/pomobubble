@@ -42,19 +42,20 @@ import com.pomobubble.model.PomodoroState
 import com.pomobubble.service.PomodoroOverlayService
 import com.pomobubble.state.PomodoroStateMachine
 import com.pomobubble.ui.HeatmapCalendarGrid
+import android.os.SystemClock
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
 
-    private val localStateMachine = PomodoroStateMachine()
+    private val stateMachine = com.pomobubble.state.PomodoroStateMachineHolder.instance
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val database = AppDatabase.getDatabase(this)
-        localStateMachine.onSessionLog = { durationMinutes, completed ->
+        stateMachine.onSessionLog = { durationMinutes, completed ->
             CoroutineScope(Dispatchers.IO).launch {
                 database.focusSessionDao().insertSession(
                     FocusSession(durationMinutes = durationMinutes, completed = completed)
@@ -107,7 +108,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val state by localStateMachine.state.collectAsState()
+            val state by stateMachine.state.collectAsState()
+
+            // Fallback ticker loop when overlay service is NOT running
+            LaunchedEffect(isServiceRunning, state.isPaused) {
+                if (!isServiceRunning && !state.isPaused) {
+                    var lastTime = SystemClock.elapsedRealtime()
+                    while (isActive) {
+                        delay(1000)
+                        val now = SystemClock.elapsedRealtime()
+                        val deltaSeconds = (now - lastTime) / 1000
+                        if (deltaSeconds >= 1) {
+                            stateMachine.onTick(deltaSeconds)
+                            lastTime = now
+                        }
+                    }
+                }
+            }
 
             val targetColor = when (state.phase) {
                 PomodoroPhase.FOCUS, PomodoroPhase.WAIT_FOCUS -> Color(0xFFC62828)
@@ -145,10 +162,10 @@ class MainActivity : ComponentActivity() {
                         // Hero Timer Controls (Large Size)
                         HeroTimerSection(
                             state = state,
-                            onTogglePlayPause = { localStateMachine.togglePlayPause() },
-                            onRewind = { localStateMachine.rewind() },
-                            onSkip = { localStateMachine.skip() },
-                            onFullReset = { localStateMachine.fullReset() }
+                            onTogglePlayPause = { stateMachine.togglePlayPause() },
+                            onRewind = { stateMachine.rewind() },
+                            onSkip = { stateMachine.skip() },
+                            onFullReset = { stateMachine.fullReset() }
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))

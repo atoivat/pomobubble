@@ -38,7 +38,7 @@ class PomodoroOverlayService : Service() {
     private val overlayLifecycleOwner = OverlayLifecycleOwner()
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    val stateMachine = PomodoroStateMachine()
+    val stateMachine = com.pomobubble.state.PomodoroStateMachineHolder.instance
     private var tickerJob: Job? = null
     private var previousPhase: PomodoroPhase = PomodoroPhase.FOCUS
 
